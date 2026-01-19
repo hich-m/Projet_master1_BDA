@@ -1,0 +1,12 @@
+{
+    "require": {
+        "php": ">=8.0",
+        "ext-mysqli": "*"
+    },
+    "require-dev": {},
+    "scripts": {
+        "post-install-cmd": [
+            "echo 'Dependencies installed successfully!'"
+        ]
+    }
+}
