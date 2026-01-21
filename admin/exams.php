@@ -41,7 +41,7 @@ $sql = "SELECT e.*, m.name as module_name, m.code as module_code,
         s.name as room_name, s.capacity,
         COUNT(DISTINCT CASE 
             WHEN e.group_number = 0 THEN i.student_id
-            WHEN et.group_number = e.group_number THEN i.student_id
+            WHEN i.group_number = e.group_number THEN i.student_id
             ELSE NULL
         END) as enrolled_count,
         (SELECT u.full_name FROM surveillances sv 

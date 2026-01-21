@@ -12,6 +12,7 @@ $error = $_GET['error'] ?? '';
 // Handle schedule generation
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] == 'generate') {
+        set_time_limit(300); // Increase time limit to 5 minutes
         try {
             // Clear existing exams and related data
             $conn->query("DELETE FROM surveillances");
@@ -225,7 +226,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                                             $conn->query("UPDATE formations SET number_of_groups = $num_groups_needed WHERE id = $formation_id");
 
                                             // Re-distribute students based on allocated sizes
-                                            distribute_students_by_chunks($conn, $formation_id, $allocated_sizes);
+                                            distribute_module_students($conn, $module['id'], $allocated_sizes);
 
                                             // Insert Exams
                                             foreach ($allocated_rooms as $idx => $room) {
@@ -295,29 +296,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                             }
                         }
 
+                        /*
                         // ============================================================
-                        // STEP 6: Check Fairness and Record Conflicts
+                        // STEP 6: Check Fairness and Record Conflicts (DISABLED)
                         // ============================================================
-                        $total_assignments = array_sum($prof_total_assignments);
-                        $count_profs = count($profs);
-                        $average = ($count_profs > 0) ? $total_assignments / $count_profs : 0;
-                        $count_above = 0;
-                        $count_below = 0;
-
-                        foreach ($prof_total_assignments as $pid => $count) {
-                            if ($count > $average)
-                                $count_above++;
-                            elseif ($count < $average)
-                                $count_below++;
-                        }
-
-                        if ($count_above > 0 || $count_below > 0) {
-                            $desc = "Fairness Report: $count_above professors are ABOVE average (" . number_format($average, 2) . ") assignments, and $count_below are BELOW average.";
-                            $c_sql = "INSERT INTO conflicts (conflict_type, description, severity, resolved) VALUES ('prof_fairness', ?, 'low', FALSE)";
-                            $c_stmt = $conn->prepare($c_sql);
-                            $c_stmt->bind_param("s", $desc);
-                            $c_stmt->execute();
-                        }
+                        // Logic removed as requested
+                        */
 
                         header("Location: scheduling.php?msg=Schedule generated successfully with $exam_count exams");
                         exit();
@@ -350,18 +334,20 @@ function find_best_professor($profs, $target_dept_id, $date, $slot_key, $prof_to
     if (count($candidates) == 0)
         return null;
     usort($candidates, function ($a, $b) {
-        return $a['score'] - $b['score']; });
+        return $a['score'] - $b['score'];
+    });
     return $candidates[0]['id'];
 }
 
 /**
- * Distribute students into chunks
+ * Distribute students into chunks (Update Inscriptions table)
  */
-function distribute_students_by_chunks($conn, $formation_id, $chunks)
+function distribute_module_students($conn, $module_id, $chunks)
 {
-    $sql = "SELECT id FROM etudiants WHERE formation_id = ? ORDER BY id";
+    // Get students enrolled in this module
+    $sql = "SELECT student_id FROM inscriptions WHERE module_id = ? AND status = 'active' ORDER BY student_id";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $formation_id);
+    $stmt->bind_param("i", $module_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $students = $result->fetch_all(MYSQLI_ASSOC);
@@ -372,11 +358,17 @@ function distribute_students_by_chunks($conn, $formation_id, $chunks)
     foreach ($chunks as $idx => $size) {
         $group_num = $idx + 1;
         $count = 0;
+        $ids_to_update = [];
+
         while ($count < $size && $current_student_idx < $total_students) {
-            $s_id = $students[$current_student_idx]['id'];
-            $conn->query("UPDATE etudiants SET group_number = $group_num WHERE id = $s_id");
+            $ids_to_update[] = $students[$current_student_idx]['student_id'];
             $current_student_idx++;
             $count++;
+        }
+
+        if (!empty($ids_to_update)) {
+            $ids_string = implode(',', $ids_to_update);
+            $conn->query("UPDATE inscriptions SET group_number = $group_num WHERE module_id = $module_id AND student_id IN ($ids_string)");
         }
     }
 }
@@ -389,12 +381,14 @@ $scheduled_exams = $conn->query("SELECT COUNT(*) as count FROM examens WHERE sta
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Schedule Exams - Admin Dashboard</title>
     <link rel="stylesheet" href="../css/style.css">
 </head>
+
 <body>
     <div class="navbar">
         <div class="navbar-brand">Exam Timetable Management - Admin</div>
@@ -418,10 +412,10 @@ $scheduled_exams = $conn->query("SELECT COUNT(*) as count FROM examens WHERE sta
     <div class="main-content">
         <div class="container">
             <?php if ($msg): ?>
-                    <div class="alert alert-success"><?php echo htmlspecialchars($msg); ?></div>
+                <div class="alert alert-success"><?php echo htmlspecialchars($msg); ?></div>
             <?php endif; ?>
             <?php if ($error): ?>
-                    <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
+                <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
             <?php endif; ?>
             <div class="row">
                 <div class="col-3">
@@ -461,7 +455,8 @@ $scheduled_exams = $conn->query("SELECT COUNT(*) as count FROM examens WHERE sta
                         <li><strong>Max 1 exam per formation per day</strong></li>
                         <li><strong>Fair professor distribution</strong></li>
                         <li><strong>Department priority</strong></li>
-                        <li><strong>Greedy Group Allocation</strong> - Splits groups dynamically based on room capacity</li>
+                        <li><strong>Greedy Group Allocation</strong> - Splits groups dynamically based on room capacity
+                        </li>
                     </ul>
                     <form method="POST" style="margin-top: 2rem;">
                         <input type="hidden" name="action" value="generate">
@@ -476,4 +471,5 @@ $scheduled_exams = $conn->query("SELECT COUNT(*) as count FROM examens WHERE sta
         </div>
     </div>
 </body>
+
 </html>

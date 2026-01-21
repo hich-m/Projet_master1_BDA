@@ -140,7 +140,7 @@ $prof_workload = $conn->query($prof_workload_sql)->fetch_all(MYSQLI_ASSOC);
                                     <th>Room</th>
                                     <th>Capacity</th>
                                     <th>Exams</th>
-                                    <th>Usage %</th>
+
                                 </tr>
                             </thead>
                             <tbody>
@@ -149,15 +149,7 @@ $prof_workload = $conn->query($prof_workload_sql)->fetch_all(MYSQLI_ASSOC);
                                         <td><?php echo htmlspecialchars($room['name']); ?></td>
                                         <td><?php echo $room['capacity']; ?> seats</td>
                                         <td><?php echo $room['exam_count']; ?></td>
-                                        <td>
-                                            <div
-                                                style="background: #ecf0f1; border-radius: 4px; overflow: hidden; height: 20px;">
-                                                <div
-                                                    style="background: #3498db; height: 100%; width: <?php echo min($room['usage_percent'], 100); ?>%; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.8rem;">
-                                                    <?php echo $room['usage_percent']; ?>%
-                                                </div>
-                                            </div>
-                                        </td>
+
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>

@@ -130,6 +130,7 @@ function get_student_exams($student_id)
             JOIN inscriptions i ON m.id = i.module_id
             WHERE i.student_id = ? AND i.status = 'active'
             AND e.accepted_by_chefdep = 1 AND e.accepted_by_doyen = 1
+            AND (e.group_number = 0 OR e.group_number = i.group_number)
             ORDER BY e.exam_date ASC, e.start_time ASC";
 
     $stmt = $conn->prepare($sql);
@@ -224,12 +225,11 @@ function check_professor_overload($prof_id)
 {
     global $conn;
 
-    $sql = "SELECT e.exam_date, COUNT(DISTINCT m.id) as exam_count, 
-            GROUP_CONCAT(DISTINCT m.name) as modules
-            FROM examens e
-            JOIN modules m ON e.module_id = m.id
-            WHERE m.professeur_id = ? 
-            AND e.status IN ('scheduled', 'in_progress', 'completed')
+    $sql = "SELECT e.exam_date, COUNT(s.id) as exam_count
+            FROM surveillances s
+            JOIN examens e ON s.exam_id = e.id
+            WHERE s.prof_id = ? 
+            AND s.status = 'assigned'
             GROUP BY e.exam_date
             HAVING exam_count > 3";
 
@@ -289,11 +289,11 @@ function get_conflicts_by_department($department_id)
             LEFT JOIN examens e ON c.exam_id = e.id
             LEFT JOIN modules m ON e.module_id = m.id
             LEFT JOIN formations f ON m.formation_id = f.id
-            WHERE (f.department_id = ? OR c.department_id = ?) AND c.resolved = FALSE
+            WHERE f.department_id = ? AND c.resolved = FALSE
             ORDER BY c.severity DESC, c.created_at DESC";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ii", $department_id, $department_id);
+    $stmt->bind_param("i", $department_id);
     $stmt->execute();
 
     return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);

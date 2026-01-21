@@ -101,7 +101,7 @@ $sql = "SELECT e.*, m.name as module_name, m.code as module_code,
         e.accepted_by_chefdep, e.accepted_by_doyen,
         COUNT(DISTINCT CASE 
             WHEN e.group_number = 0 THEN i.student_id
-            WHEN et.group_number = e.group_number THEN i.student_id
+            WHEN i.group_number = e.group_number THEN i.student_id
             ELSE NULL
         END) as enrolled_count
         FROM examens e
